@@ -1,0 +1,1517 @@
+import pandas as pd
+import numpy as np
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.model_selection import TimeSeriesSplit, cross_val_score
+from sklearn.linear_model import LogisticRegression
+from keras.models import Sequential
+from sklearn.metrics import recall_score
+
+# Load the dataset into a pandas DataFrame with the correct delimiter
+file_path = "E:\\histor\\NAS100_H1_r1.csv"
+df = pd.read_csv(file_path, sep='\t', header=0)
+
+# Remove any potential angle brackets from column headers
+df.columns = df.columns.str.replace('[<>]', '', regex=True)
+
+# Define a function to check if the price is near support or resistance
+def is_near_support_resistance(price, support, resistance, threshold=0.05):
+    is_near_support = abs(price - support) / support < threshold
+    is_near_resistance = abs(price - resistance) / resistance < threshold
+    return is_near_support or is_near_resistance
+
+# Function to detect uptrend based on closing prices
+def is_Uptrend(df, index, window=3):
+    if index < window - 1:
+        return False
+    return all(df.at[index - i, 'CLOSE'] > df.at[index - i - 1, 'CLOSE'] for i in range(1, window))
+
+# Function to detect downtrend based on closing prices
+def is_downtrend(df, index, window=3):
+    if index < window - 1:
+        return False
+    return all(df.at[index - i, 'CLOSE'] < df.at[index - i - 1, 'CLOSE'] for i in range(1, window))
+
+# Define and calculate Exponential Moving Averages
+df['EMA9'] = df['CLOSE'].ewm(span=9, adjust=False).mean()
+df['EMA21'] = df['CLOSE'].ewm(span=21, adjust=False).mean()
+df['EMA55'] = df['CLOSE'].ewm(span=55, adjust=False).mean()
+
+# Define and calculate Relative Strength Index (RSI)
+def calculate_rsi(series, period=14):
+    delta = series.diff()
+    gain = delta.where(delta > 0, 0)
+    loss = -delta.where(delta < 0, 0)
+    avg_gain = gain.rolling(window=period).mean()
+    avg_loss = loss.rolling(window=period).mean()
+    rs = avg_gain / avg_loss
+    return 100 - (100 / (1 + rs))
+
+df['RSI14'] = calculate_rsi(df['CLOSE'])
+
+# Define and calculate Relative Strength Index (RSI)
+def calculate_rsi(series, period=14):
+    delta = series.diff()
+    gain = delta.where(delta > 0, 0)
+    loss = -delta.where(delta < 0, 0)
+    avg_gain = gain.rolling(window=period).mean()
+    avg_loss = loss.rolling(window=period).mean()
+    rs = avg_gain / avg_loss
+    return 100 - (100 / (1 + rs))
+
+df['RSI14'] = calculate_rsi(df['CLOSE'])
+# Normalize features using MinMaxScaler
+scaler = MinMaxScaler()
+features = ['EMA9', 'EMA21', 'EMA55', 'RSI14']  # Add other features like 'Stochastic_K', 'Stochastic_D', 'ATR14' as they are defined
+df[features] = scaler.fit_transform(df[features])
+
+# This point forward would be where the data is prepared for the model, ensuring X and y are defined
+# For example, ensure the 'target' column exists and split the data for training and validation
+if 'target' in df.columns:
+    X = df.drop('target', axis=1)
+    y = df['target']
+else:
+    print("'target' column not found. Please ensure your data includes a 'target' column.")
+
+
+
+
+
+
+
+
+# Liquidity Grab Detection
+def is_liquidity_grab(index, df, lookback_period=5, VOL_factor=1.5, rng_factor=1.5):
+    # Ensure there's enough data for the lookback period
+    if index < lookback_period:
+        return False
+
+    # Current row data
+    current_row = df.iloc[index]
+    HIGH = current_row['HIGH']
+    LOW = current_row['LOW']
+    CLOSE = current_row['CLOSE']
+    volume = current_row['VOL']
+
+    # Calculate average range and volume for the lookback period
+    lookback_rows = df.iloc[index - lookback_period:index]
+    avg_range = lookback_rows['HIGH'] - lookback_rows['LOW']
+    avg_volume = lookback_rows['VOL']
+
+    # Conditions for Liquidity Grab
+    is_significant_range = (HIGH - LOW) > avg_range.mean() * rng_factor
+    is_significant_volume = volume > avg_volume.mean() * VOL_factor
+    is_spike_above = HIGH > df.iloc[index - 1]['HIGH']
+    is_CLOSE_LOWer_half = CLOSE < (HIGH + LOW) / 2
+
+    return is_significant_range and is_significant_volume and is_spike_above and is_CLOSE_LOWer_half
+
+# Bullish Engulfing Pattern Detection
+import pandas as pd
+
+# Sample data creation (replace this with your actual data)
+# This is just a dummy DataFrame. Replace it with your actual data.
+data = {
+    'Open': [100, 102, 101, 105, 103],
+    'CLOSE': [101, 100, 106, 104, 108],
+}
+df = pd.DataFrame(data)
+
+def is_bullish_engulfing(row, prev_row):
+    prev_open = prev_row['Open']
+    prev_CLOSE = prev_row['CLOSE']
+    curr_open = row['Open']
+    curr_CLOSE = row['CLOSE']
+
+    is_prev_candle_bearish = prev_CLOSE < prev_open
+    is_curr_candle_bullish = curr_CLOSE > curr_open
+
+    is_engulfing = is_prev_candle_bearish and is_curr_candle_bullish and curr_open < prev_CLOSE and curr_CLOSE > prev_open
+    is_body_size_significant = abs(curr_CLOSE - curr_open) > abs(prev_CLOSE - prev_open) * 1.5
+
+    return is_engulfing and is_body_size_significant
+
+# Initialize the column with False
+df['Bullish_Engulfing'] = False
+
+# Iterate through the DataFrame to apply the function
+for i in range(1, len(df)):
+    df.at[i, 'Bullish_Engulfing'] = is_bullish_engulfing(df.iloc[i], df.iloc[i - 1])
+
+print(df)
+
+
+#+------------------------------------------------------------------+
+#
+#+------------------------------------------------------------------+
+# bearish_engulfing
+#+------------------------------------------------------------------+
+
+
+
+import pandas as pd
+
+# Assuming df is already loaded and prepared as per the previous steps
+# df = pd.read_csv("path/to/NAS100_H1_202401020100_202401311400.csv")
+
+def is_bearish_engulfing(row, prev_row):
+    # Extracting current and previous candlestick data
+    prev_open = prev_row['Open']
+    prev_CLOSE = prev_row['CLOSE']
+    curr_open = row['Open']
+    curr_CLOSE = row['CLOSE']
+
+    # Defining the conditions for a Bearish Engulfing pattern
+    is_prev_candle_bullish = prev_CLOSE > prev_open
+    is_curr_candle_bearish = curr_CLOSE < curr_open
+    is_engulfing = is_prev_candle_bullish and is_curr_candle_bearish and curr_open > prev_CLOSE and curr_CLOSE < prev_open
+    is_body_size_significant = abs(curr_CLOSE - curr_open) > abs(prev_CLOSE - prev_open) * 1.5
+
+    # The pattern is valid if all conditions are met
+    return is_engulfing and is_body_size_significant
+
+# Initialize the 'Bearish_Engulfing' column with False
+df['Bearish_Engulfing'] = False
+
+# Apply the bearish engulfing pattern detection across the DataFrame
+for i in range(1, len(df)):
+    df.at[i, 'Bearish_Engulfing'] = is_bearish_engulfing(df.iloc[i], df.iloc[i - 1])
+
+# Displaying the DataFrame to verify the added column
+print(df[['Open', 'CLOSE', 'Bearish_Engulfing']].head())  # Modify to view more columns as needed
+
+#+------------------------------------------------------------------+
+#x
+#+------------------------------------------------------------------+
+#  bearish_engulfing
+#+------------------------------------------------------------------+
+
+#+------------------------------------------------------------------+
+#x
+#+------------------------------------------------------------------+
+# morning_star
+#+------------------------------------------------------------------+
+
+import pandas as pd
+
+# Assuming df is already loaded and prepared as per the previous steps
+# df = pd.read_csv("path/to/NAS100_H1_202401020100_202401311400.csv")
+
+def is_morning_star(row, prev_row_1, prev_row_2, small_body_factor=0.5, body_fraction=0.5):
+    open1 = prev_row_2['Open']
+    CLOSE1 = prev_row_2['CLOSE']
+    open2 = prev_row_1['Open']
+    CLOSE2 = prev_row_1['CLOSE']
+    open3 = row['Open']
+    CLOSE3 = row['CLOSE']
+
+    isFirstCandleBearish = CLOSE1 < open1
+    body1 = abs(CLOSE1 - open1)
+    isSecondCandleSmall = abs(CLOSE2 - open2) < small_body_factor * body1 and CLOSE2 < CLOSE1 and open2 < open1
+    isThirdCandleBullish = CLOSE3 > open3 and CLOSE3 > open1 + body_fraction * body1
+    isGapPresent = open2 < CLOSE1 and open3 > CLOSE2
+
+    return isFirstCandleBearish and isSecondCandleSmall and isThirdCandleBullish and isGapPresent
+
+# Applying the Morning Star detection to the DataFrame
+df['Morning_Star'] = False
+for i in range(2, len(df)):
+    df.at[i, 'Morning_Star'] = is_morning_star(df.iloc[i], df.iloc[i - 1], df.iloc[i - 2])
+
+# Verify the result
+print(df[['Open', 'CLOSE', 'Morning_Star']].tail())  # Adjust columns as needed to view relevant data
+
+
+
+
+#+------------------------------------------------------------------+
+#xInitialize
+#+------------------------------------------------------------------+
+#bullish_harami
+#+------------------------------------------------------------------+
+
+import pandas as pd
+
+# Assuming df is already loaded and prepared as per the previous steps
+# df = pd.read_csv("path/to/your_data.csv")
+
+def is_bullish_harami(row, prev_row, average_body_size):
+    prev_open = prev_row['Open']
+    prev_CLOSE = prev_row['CLOSE']
+    curr_open = row['Open']
+    curr_CLOSE = row['CLOSE']
+
+    is_prev_candle_bearish = prev_CLOSE < prev_open
+    is_curr_candle_bullish = curr_CLOSE > curr_open
+    is_inside_prev_candle = curr_open > prev_CLOSE and curr_CLOSE < prev_open
+    is_prev_candle_large = abs(prev_CLOSE - prev_open) > average_body_size
+    is_curr_candle_small = abs(curr_CLOSE - curr_open) < average_body_size
+
+    return is_prev_candle_bearish and is_curr_candle_bullish and is_inside_prev_candle and is_prev_candle_large and is_curr_candle_small
+
+# Adding the Bullish Harami detection to the DataFrame
+df['Bullish_Harami'] = False
+
+# Calculating the average body size for the required period
+averaging_period = 5  # Adjust as needed
+df['Body_Size'] = abs(df['CLOSE'] - df['Open'])
+df['Avg_Body_Size'] = df['Body_Size'].rolling(window=averaging_period).mean().shift(1)  # Shift to avoid lookahead bias
+
+# Apply the function to each row (except the first row)
+for i in range(1, len(df)):
+    df.at[i, 'Bullish_Harami'] = is_bullish_harami(df.iloc[i], df.iloc[i - 1], df.at[i, 'Avg_Body_Size'])
+
+# Drop the intermediate columns if not needed
+df.drop(['Body_Size', 'Avg_Body_Size'], axis=1, inplace=True)
+
+# Verify the results
+print(df[['Open', 'CLOSE', 'Bullish_Harami']].tail())  # Adjust to view relevant data
+
+
+#------------------------------------------------------------------+
+#xInitialize
+#------------------------------------------------------------------+
+# inverted_hammer
+#------------------------------------------------------------------+
+
+
+import pandas as pd
+
+# Function to determine if a row in the DataFrame represents an inverted hammer candlestick
+def is_inverted_hammer(row, body_factor=1.0/3, upper_shadow_factor=2.0):
+    open_price = row['OPEN']
+    close_price = row['CLOSE']
+    low = row['LOW']
+    high = row['HIGH']
+
+    body_length = abs(close_price - open_price)
+    candle_range = high - low
+    upper_shadow_length = high - max(open_price, close_price)
+    lower_shadow_length = min(open_price, close_price) - low
+
+    is_small_body = body_length <= body_factor * candle_range
+    is_long_upper_shadow = upper_shadow_length >= upper_shadow_factor * body_length
+    is_short_lower_shadow = lower_shadow_length <= body_length * body_factor
+
+    return is_small_body and is_long_upper_shadow and is_short_lower_shadow
+
+# Assume df is your DataFrame
+# Check if the required columns exist
+required_columns = ['OPEN', 'CLOSE', 'LOW', 'HIGH']
+existing_columns = [col for col in required_columns if col in df.columns]
+
+if len(existing_columns) == len(required_columns):
+    # Apply the function to determine if each row is an inverted hammer
+    df['INVERTED_HAMMER'] = df.apply(is_inverted_hammer, axis=1)
+    print(df[['OPEN', 'CLOSE', 'LOW', 'HIGH', 'INVERTED_HAMMER']].tail())
+else:
+    print(f"One or more of the required columns {required_columns} are not in the DataFrame.")
+    print("Available columns:", df.columns.tolist())
+
+
+#------------------------------------------------------------------+
+#xInitialize
+#------------------------------------------------------------------+
+# evening_star
+#------------------------------------------------------------------+
+
+
+import pandas as pd
+
+# Assuming df is already loaded and prepared as per the previous steps
+# df = pd.read_csv("path/to/your_data.csv")
+
+def is_evening_star(row1, row2, row3, average_candle_size):
+    # Unpack rows for each day
+    open1, CLOSE1 = row1['Open'], row1['CLOSE']
+    open2, CLOSE2 = row2['Open'], row2['CLOSE']
+    open3, CLOSE3 = row3['Open'], row3['CLOSE']
+
+    # Confirm an uptrend before the pattern
+    isFirstCandleBullish = CLOSE1 > open1 and (CLOSE1 - open1) > average_candle_size / 2
+    isSecondCandleGapUp = open2 > CLOSE1 and abs(CLOSE2 - open2) < average_candle_size / 2
+    isThirdCandleBearish = CLOSE3 < open3 and open3 < CLOSE1 and CLOSE3 < open1 - (CLOSE1 - open1) / 2
+
+    # Additional checks for context and reliability (contextual checks would be implemented elsewhere)
+    return isFirstCandleBullish and isSecondCandleGapUp and isThirdCandleBearish
+
+# Assuming you have pre-calculated the 'Uptrend' column
+# Calculate average candle size for the pattern recognition
+df['Average_Candle_Size'] = abs(df['CLOSE'] - df['Open']).rolling(window=3).mean().shift(1)
+
+# Ensure the 'Downtrend' column exists before attempting to use it
+def is_three_white_soldiers(day1, day2, day3):
+    # Define the criteria for three white soldiers here
+    # This is a placeholder implementation; adjust it based on your specific criteria
+    is_bullish_day = lambda day: day['CLOSE'] > day['OPEN']
+    has_increasing_close = day1['CLOSE'] < day2['CLOSE'] < day3['CLOSE']
+
+    return is_bullish_day(day1) and is_bullish_day(day2) and is_bullish_day(day3) and has_increasing_close
+
+# Now you can use this function in your for loop
+df['Three_White_Soldiers'] = False
+for i in range(2, len(df)):
+    if 'Downtrend' in df.columns and df.at[i - 2, 'Downtrend']:
+        df.at[i, 'Three_White_Soldiers'] = is_three_white_soldiers(df.iloc[i-2], df.iloc[i-1], df.iloc[i])
+
+# Verify the result
+print(df[['OPEN', 'CLOSE', 'Downtrend', 'Three_White_Soldiers']].tail())  # Adjust to view relevant data
+
+#------------------------------------------------------------------+
+#xInitialize
+#------------------------------------------------------------------+
+# bearish_harami
+#------------------------------------------------------------------+
+
+
+import pandas as pd
+
+# Assuming df is already loaded and prepared as per the previous steps
+# df = pd.read_csv("path/to/your_data.csv")
+
+def is_bearish_harami(row1, row2):
+    prevOpen, prevCLOSE = row1['Open'], row1['CLOSE']
+    currOpen, currCLOSE = row2['Open'], row2['CLOSE']
+
+    isPrevCandleBullish = prevCLOSE > prevOpen
+    isCurrCandleBearish = currCLOSE < currOpen
+    isCurrCandleInsidePrevCandle = currOpen > prevOpen and currCLOSE < prevCLOSE
+
+    # Ensure this function is called only during an uptrend
+    return isPrevCandleBullish and isCurrCandleBearish and isCurrCandleInsidePrevCandle
+
+# Adding the Bearish Harami detection to the DataFrame
+# Ensure there's a logical way to determine if the previous trend was an uptrend
+df['Bearish_Harami'] = False
+for i in range(1, len(df)):
+    # Assuming 'Uptrend' is a boolean column you've calculated
+    if df.loc[i - 1, 'Uptrend']:
+        df.loc[i, 'Bearish_Harami'] = is_bearish_harami(df.loc[i - 1], df.loc[i])
+
+# Verify the result
+print(df[['Open', 'CLOSE', 'Uptrend', 'Bearish_Harami']].tail())  # Adjust to view relevant data
+
+
+#------------------------------------------------------------------+
+#xInitialize
+#------------------------------------------------------------------+
+#three_white_soldiers
+#------------------------------------------------------------------+
+
+
+import pandas as pd
+
+# Assuming df is already loaded and prepared as per the previous steps
+# df = pd.read_csv("path/to/your_data.csv")
+
+def is_three_white_soldiers(row1, row2, row3, CLOSE_threshold=0.2):
+    # Check if each candle is bullish and has a minimal upper shadow
+    for row in [row1, row2, row3]:
+        open_price, CLOSE_price, HIGH = row['Open'], row['CLOSE'], row['HIGH']
+        if not (CLOSE_price > open_price and (HIGH - CLOSE_price) / (CLOSE_price - open_price) <= CLOSE_threshold):
+            return False
+    
+    # Check if each successive candle opens within the body of the previous candle and CLOSEs HIGHer than the previous one
+    if not (row1['Open'] < row2['Open'] < row2['CLOSE'] < row3['Open'] < row3['CLOSE']):
+        return False
+    
+    return True
+
+# Adding the Three White Soldiers detection to the DataFrame
+df['Three_White_Soldiers'] = False
+for i in range(2, len(df)):
+    # You would need to determine if the market was in a downtrend before the pattern
+    downtrend = df.at[i-2, 'Downtrend']  # This assumes you have a 'Downtrend' column or a way to define a downtrend
+    if downtrend:
+        df.at[i, 'Three_White_Soldiers'] = is_three_white_soldiers(df.iloc[i-2], df.iloc[i-1], df.iloc[i])
+
+# Verify the result
+print(df[['Open', 'CLOSE', 'HIGH', 'Downtrend', 'Three_White_Soldiers']].tail())  # Adjust to view relevant data
+
+
+#------------------------------------------------------------------+
+#xInitialize
+#------------------------------------------------------------------+
+#three_black_crows
+#------------------------------------------------------------------+
+
+
+import pandas as pd
+
+# Assuming df is already loaded and prepared as per the previous steps
+# df = pd.read_csv("path/to/your_data.csv")
+
+def is_three_black_crows(row1, row2, row3, CLOSE_threshold=0.2):
+    # Check if each candle is bearish and has a minimal LOWer shadow
+    for row in [row1, row2, row3]:
+        open_price, CLOSE_price, LOW = row['Open'], row['CLOSE'], row['LOW']
+        if not (CLOSE_price < open_price and (open_price - CLOSE_price) / (open_price - LOW) <= CLOSE_threshold):
+            return False
+    
+    # Check if each successive candle opens within the body of the previous candle and CLOSEs LOWer than the previous one
+    if not (row1['CLOSE'] > row2['Open'] > row2['CLOSE'] and row2['CLOSE'] > row3['Open'] > row3['CLOSE']):
+        return False
+    
+    return True
+
+# Adding the Three Black Crows detection to the DataFrame
+df['Three_Black_Crows'] = False
+for i in range(2, len(df)):
+    # Assuming 'Uptrend' is a boolean column indicating if the market is in an uptrend
+    if df.loc[i - 2, 'Uptrend']:
+        df.loc[i, 'Three_Black_Crows'] = is_three_black_crows(df.loc[i - 2], df.loc[i - 1], df.loc[i])
+
+# Verify the result
+print(df[['Open', 'CLOSE', 'LOW', 'Uptrend', 'Three_Black_Crows']].tail())  # Adjust to view relevant data
+
+
+
+#------------------------------------------------------------------+
+#xInitialize
+#------------------------------------------------------------------+
+#piercing_line
+#------------------------------------------------------------------+
+
+import pandas as pd
+
+# Assuming df is already loaded and prepared as per the previous steps
+# df = pd.read_csv("path/to/your_data.csv")
+
+def is_piercing_line(row1, row2):
+    # Criteria for the Piercing Line pattern
+    isPrevBearish = row1['CLOSE'] < row1['Open']
+    isCurrBullish = row2['CLOSE'] > row2['Open']
+    isGapDown = row2['Open'] < row1['CLOSE']
+    isClosingAboveMidpoint = row2['CLOSE'] > row1['Open'] + (row1['Open'] - row1['CLOSE']) / 2
+
+    # Validate all conditions for a reliable Piercing Line pattern
+    return isPrevBearish and isCurrBullish and isGapDown and isClosingAboveMidpoint
+
+# Applying the function to the DataFrame
+# 'Downtrend' column or logic needs to be defined to check for a downtrend
+df['Piercing_Line'] = False
+for i in range(1, len(df)):
+    # Checking for downtrend condition for the previous day
+    downtrend = df.at[i - 1, 'Downtrend']  # Ensure there's a logic or column determining the downtrend
+    if downtrend:
+        df.at[i, 'Piercing_Line'] = is_piercing_line(df.iloc[i - 1], df.iloc[i])
+
+# Verify the result
+print(df[['Open', 'CLOSE', 'Downtrend', 'Piercing_Line']].tail())  # Adjust to view relevant data
+
+
+#------------------------------------------------------------------+
+#xInitialize
+#------------------------------------------------------------------+
+# doji
+#------------------------------------------------------------------+
+
+def is_doji(row, ratioThreshold=0.1):
+    open_price = row['Open']
+    CLOSE_price = row['CLOSE']
+    HIGH = row['HIGH']
+    LOW = row['LOW']
+
+    # Calculate the body length and the total range
+    body_length = abs(CLOSE_price - open_price)
+    total_range = HIGH - LOW
+
+    # Check if the body length is within the threshold ratio
+    is_body_small = body_length <= (total_range * ratioThreshold)
+
+    # Use is_near_support_resistance for additional context check
+    support = 95  # Example support value
+    resistance = 105  # Example resistance value
+    is_near_sr = is_near_support_resistance(CLOSE_price, support, resistance)
+
+    # Use is_pattern_valid for additional pattern validation (logic to be defined based on 'some_parameter')
+    some_parameter = body_length / total_range  # Example parameter calculation
+    is_pattern_valid_check = is_pattern_valid(some_parameter)
+
+    # The Doji is valid if the body is small, it's near support/resistance, and the pattern is valid
+    return is_body_small and is_near_sr and is_pattern_valid_check
+
+# Example DataFrame
+df = pd.DataFrame({
+    'Open': [100, 101, 102],
+    'CLOSE': [100.1, 101.1, 102.1],
+    'HIGH': [105, 106, 107],
+    'LOW': [99, 100, 101],
+})
+
+# Apply the is_doji function to each row in the DataFrame
+df['Doji'] = df.apply(is_doji, axis=1)
+
+print(df)
+
+
+
+#------------------------------------------------------------------+
+#xInitialize
+#------------------------------------------------------------------+
+# dark_cloud_cover
+#------------------------------------------------------------------+
+
+def is_dark_cloud_cover(df, index):
+    if index == 0 or index >= len(df) - 1:
+        return False
+
+    prev_row = df.iloc[index - 1]
+    curr_row = df.iloc[index]
+
+    prev_open = prev_row['Open']
+    prev_CLOSE = prev_row['CLOSE']
+    curr_open = curr_row['Open']
+    curr_CLOSE = curr_row['CLOSE']
+
+    # Criteria for a Dark Cloud Cover pattern
+    is_prev_bullish = prev_CLOSE > prev_open
+    is_curr_bearish = curr_CLOSE < curr_open
+    open_above_prev_HIGH = curr_open > prev_CLOSE
+    CLOSE_beLOW_midpoint_prev = curr_CLOSE < (prev_open + (prev_CLOSE - prev_open) / 2)
+    CLOSE_above_prev_open = curr_CLOSE > prev_open
+
+    # Check if the pattern occurs after an uptrend
+    is_in_uptrend = is_Uptrend(df, index - 1)  # Adapt this call to your is_uptrend function
+
+    # Check for proximity to support or resistance (You'll need to define how you determine these levels)
+    is_near_support_or_resistance = is_near_support_resistance(curr_CLOSE)  # Adapt this call to your function
+
+    # Check if the pattern is considered valid based on historical performance
+    has_HIGH_success_rate = is_pattern_valid("DarkCloudCover", index)  # Adapt this call to your function
+
+    return is_in_uptrend and is_prev_bullish and is_curr_bearish and open_above_prev_HIGH and \
+           CLOSE_beLOW_midpoint_prev and CLOSE_above_prev_open and is_near_support_or_resistance and has_HIGH_success_rate
+
+# Initialize the 'Dark_Cloud_Cover' column with False
+df['Dark_Cloud_Cover'] = False
+
+# Iterate through the DataFrame to apply the function
+for i in range(1, len(df)):
+    df.at[i, 'Dark_Cloud_Cover'] = is_dark_cloud_cover(df, i)
+
+
+
+#------------------------------------------------------------------+
+#x
+#------------------------------------------------------------------+
+# double_bottom
+#------------------------------------------------------------------+
+
+
+def is_double_bottom(df, index, tolerance_percentage):
+    if index + 2 >= len(df):
+        print("Not enough bars to identify a Double Bottom pattern.")
+        return False
+
+    bottom1 = df.iloc[index]['LOW']
+    peak = df.iloc[index + 1]['HIGH']
+    bottom2 = df.iloc[index + 2]['LOW']
+    tolerance = bottom1 * (tolerance_percentage / 100.0)
+
+    if bottom2 >= bottom1 - tolerance and bottom2 <= bottom1 + tolerance:
+        if index + 3 >= len(df):
+            print("No subsequent bar to confirm the rise after the second bottom.")
+            return False
+
+        riseAfterBottom = df.iloc[index + 3]['HIGH']
+        if riseAfterBottom > peak:
+            # Contextual checks for the pattern's validity
+            isNearSupportOrResistance = is_near_support_resistance(df, (bottom1 + bottom2) / 2, index + 2)
+            hasHIGHSuccessRate = is_pattern_valid("DoubleBottom", (bottom1 + bottom2) / 2, index + 2)
+            isInDowntrend = is_downtrend(df, index, 3)  # Assuming is_downtrend checks for downtrend before index
+
+            return isInDowntrend and isNearSupportOrResistance and hasHIGHSuccessRate
+        else:
+            print("The price post second bottom does not surpass the peak.")
+    else:
+        print("The second bottom does not align within the tolerance range of the first bottom.")
+
+    return False
+
+# Initialize the column with False
+df['Double_Bottom'] = False
+
+# Start from the third row to have enough data for the pattern
+for i in range(2, len(df) - 2):
+    df.at[i, 'Double_Bottom'] = is_double_bottom(df, i, tolerance_percentage=5)  # Example tolerance_percentage
+
+#+------------------------------------------------------------------+
+#x
+#+------------------------------------------------------------------+
+# inverted_head_and_shoulders
+#+------------------------------------------------------------------+
+
+def is_inverted_head_and_shoulders(df, index, shoulder_tolerance, head_tolerance):
+    if index + 4 >= len(df):
+        print("Insufficient data to detect an Inverted Head and Shoulders pattern.")
+        return False
+
+    left_shoulder = df.iloc[index]['LOW']
+    head = df.iloc[index + 2]['LOW']
+    right_shoulder = df.iloc[index + 4]['LOW']
+    left_peak = df.iloc[index + 1]['HIGH']
+    right_peak = df.iloc[index + 3]['HIGH']
+
+    if not (head < left_shoulder and head < right_shoulder):
+        print("Head is not the LOWest point compared to the shoulders.")
+        return False
+
+    if abs(left_shoulder - right_shoulder) > left_shoulder * (shoulder_tolerance / 100):
+        print("The shoulders' heights are not within the tolerance limit.")
+        return False
+
+    if not (left_shoulder - head > left_shoulder * (head_tolerance / 100) and right_shoulder - head > right_shoulder * (head_tolerance / 100)):
+        print("The head is not significantly LOWer than either shoulder.")
+        return False
+
+    if not (left_peak > left_shoulder and right_peak > right_shoulder):
+        print("Neckline peaks do not surpass the shoulders' heights.")
+        return False
+
+    # Assuming these functions are defined elsewhere in your code
+    is_near_support_or_resistance = is_near_support_resistance(df, (left_shoulder + right_shoulder) / 2, index)
+    has_HIGH_success_rate = is_pattern_valid("InvertedHeadAndShoulders", (left_shoulder + right_shoulder) / 2, index)
+    is_in_uptrend = is_Uptrend(df, index + 5, 5)
+
+    return is_in_uptrend and is_near_support_or_resistance and has_HIGH_success_rate
+
+# Initialize the column with False
+df['Inverted_Head_And_Shoulders'] = False
+
+# Iterate through the DataFrame to apply the function
+# Start from the fifth row to have enough data points for the pattern detection
+for i in range(4, len(df) - 4):
+    df.at[i, 'Inverted_Head_And_Shoulders'] = is_inverted_head_and_shoulders(df, i, shoulder_tolerance=5, head_tolerance=10)  # Example tolerance values
+
+
+#+------------------------------------------------------------------+
+#x
+#+------------------------------------------------------------------+
+#bullish_channel
+#+------------------------------------------------------------------+
+
+
+def is_bullish_channel(df, startIndex, endIndex, tolerance):
+    if endIndex <= startIndex or endIndex >= len(df):
+        print("Invalid index range for bullish channel detection.")
+        return False
+
+    LOWestLOW = df.iloc[startIndex]['LOW']
+    HIGHestHIGH = df.iloc[startIndex]['HIGH']
+    previousLOW = LOWestLOW
+    previousHIGH = HIGHestHIGH
+    ascendingLOWs = True
+    ascendingHIGHs = True
+
+    for i in range(startIndex + 1, endIndex + 1):
+        currentLOW = df.iloc[i]['LOW']
+        currentHIGH = df.iloc[i]['HIGH']
+
+        if currentLOW <= previousLOW:
+            ascendingLOWs = False
+        if currentHIGH <= previousHIGH:
+            ascendingHIGHs = False
+
+        previousLOW = currentLOW
+        previousHIGH = currentHIGH
+
+    if not ascendingLOWs or not ascendingHIGHs:
+        print("The series does not demonstrate consistent HIGHer LOWs and HIGHer HIGHs for a bullish channel.")
+        return False
+
+    LOWSlope = (previousLOW - LOWestLOW) / (endIndex - startIndex)
+    HIGHSlope = (previousHIGH - HIGHestHIGH) / (endIndex - startIndex)
+    isParallel = abs(LOWSlope - HIGHSlope) <= tolerance
+
+    # You need to adapt the isUptrend, isNearSupportResistance, and isPatternValid functions for DataFrame usage
+    isInUptrend = is_Uptrend(df, startIndex, endIndex - startIndex)
+    isNearSupportOrResistance = is_near_support_resistance(df, (LOWestLOW + HIGHestHIGH) / 2, startIndex, endIndex)
+    hasHIGHSuccessRate = is_pattern_valid(df, "BullishChannel", (LOWestLOW + HIGHestHIGH) / 2, startIndex, endIndex)
+
+    return isParallel and ascendingLOWs and ascendingHIGHs and isInUptrend and isNearSupportOrResistance and hasHIGHSuccessRate
+
+# Initialize the column with False
+df['Bullish_Channel'] = False
+
+# Iterate through the DataFrame to apply the function
+# You need to define the window (start_index, end_index) for each row to check for the pattern
+# For this example, let's use a window of 5 rows
+window_size = 5
+for i in range(window_size, len(df)):
+    df.at[i, 'Bullish_Channel'] = is_bullish_channel(df, i - window_size, i)
+
+
+
+
+#+------------------------------------------------------------------+
+#x
+#+------------------------------------------------------------------+
+#bull_flag
+#+------------------------------------------------------------------+
+
+
+def is_bull_flag(df, index, poleLength, flagLength, poleMinRise, flagTolerance):
+    if index + poleLength + flagLength >= len(df):
+        print("Insufficient data for bull flag pattern detection.")
+        return False
+
+    poleStartPrice = df.iloc[index + poleLength + flagLength]['CLOSE']
+    poleEndPrice = df.iloc[index + flagLength]['CLOSE']
+    if not (poleEndPrice > poleStartPrice and (poleEndPrice - poleStartPrice) / poleStartPrice >= poleMinRise):
+        print("Pole criteria not met.")
+        return False
+
+    isFlag = True
+    HIGHestHIGH = df.iloc[index + flagLength]['HIGH']
+    LOWestLOW = df.iloc[index + flagLength]['LOW']
+    for i in range(index + flagLength - 1, index - 1, -1):
+        if df.iloc[i]['HIGH'] > HIGHestHIGH or df.iloc[i]['LOW'] < LOWestLOW:
+            isFlag = False
+            break
+
+    if isFlag and (HIGHestHIGH - LOWestLOW) > (poleEndPrice - poleStartPrice) * flagTolerance:
+        print("Flag's proportion exceeds tolerance compared to the pole.")
+        isFlag = False
+
+    if isFlag and index - 1 >= 0:
+        if df.iloc[index - 1]['CLOSE'] <= HIGHestHIGH:
+            print("Lack of bullish breakout folLOWing the flag.")
+            isFlag = False
+    else:
+        print("Cannot confirm the bullish breakout due to inadequate data.")
+        isFlag = False
+
+    # Additional context checks for increased reliability
+    isInUptrend = is_Uptrend(df, index + poleLength + flagLength, poleLength)  # Define is_uptrend function based on DataFrame
+    isNearSupportOrResistance = is_near_support_resistance(df, poleStartPrice, index, index + poleLength + flagLength)  # Define this function based on DataFrame
+    hasHIGHSuccessRate = is_pattern_valid(df, "BullFlag", poleStartPrice, index)  # Define this function based on DataFrame
+
+    if not isInUptrend:
+        print("Bull Flag does not align with the uptrend.")
+        isFlag = False
+
+    return isFlag and isNearSupportOrResistance and hasHIGHSuccessRate
+
+# Initialize the column with False
+df['Bull_Flag'] = False
+
+# Define your parameters for the pattern detection
+pole_length = 5
+flag_length = 3
+pole_min_rise = 0.05  # 5% rise for the pole
+
+# Iterate through the DataFrame to apply the function
+for i in range(pole_length + flag_length, len(df)):
+    df.at[i, 'Bull_Flag'] = is_bull_flag(df, i, pole_length, flag_length, pole_min_rise)
+
+# Initialize the column with False
+df['Bull_Flag'] = False
+
+# Define your parameters for the pattern detection
+pole_length = 5
+flag_length = 3
+pole_min_rise = 0.05  # 5% rise for the pole
+
+# Iterate through the DataFrame to apply the function
+for i in range(pole_length + flag_length, len(df)):
+    df.at[i, 'Bull_Flag'] = is_bull_flag(df, i, pole_length, flag_length, pole_min_rise)
+
+
+
+#+------------------------------------------------------------------+
+#x
+#+------------------------------------------------------------------+
+#double_top
+#+------------------------------------------------------------------+
+
+
+def is_double_bottom(df, index, tolerance_percentage):
+    if index - 2 < 0 or index >= len(df):
+        return False
+
+    bottom1 = df.iloc[index - 2]['LOW']
+    peak = df.iloc[index - 1]['HIGH']
+    bottom2 = df.iloc[index]['LOW']
+    tolerance = bottom1 * (tolerance_percentage / 100.0)
+
+    if bottom1 - tolerance <= bottom2 <= bottom1 + tolerance:
+        # Check for rise after the second bottom
+        if index + 1 >= len(df):
+            return False
+
+        rise_after_bottom = df.iloc[index + 1]['HIGH']
+        if rise_after_bottom > peak:
+            # Additional contextual checks
+            is_near_support_or_resistance = is_near_support_resistance(df, index)  # Adapt to your function
+            has_HIGH_success_rate = is_pattern_valid("DoubleBottom", index)  # Adapt to your function
+            is_in_downtrend = is_downtrend(df, index - 2, 3)  # Adapt to your function
+
+            return is_in_downtrend and is_near_support_or_resistance and has_HIGH_success_rate
+    return False
+
+# Apply the function to the DataFrame
+df['Double_Bottom'] = False
+for i in range(2, len(df)):
+    df.at[i, 'Double_Bottom'] = is_double_bottom(df, i, tolerance_percentage=5)  # Adjust tolerance_percentage as needed
+
+
+#+------------------------------------------------------------------+
+#x
+#+------------------------------------------------------------------+
+# head_and_shoulders
+#+------------------------------------------------------------------+
+
+
+
+def is_head_and_shoulders(df, index, shoulder_tolerance, head_tolerance, neckline_tolerance):
+    if index + 4 >= len(df) or index - 1 < 0:
+        return False
+
+    left_shoulder = df.at[index + 4, 'HIGH']
+    head = df.at[index + 2, 'HIGH']
+    right_shoulder = df.at[index, 'HIGH']
+    left_neckline = df.at[index + 3, 'LOW']
+    right_neckline = df.at[index + 1, 'LOW']
+
+    # Validate pattern structure
+    if not (head > left_shoulder and head > right_shoulder and abs(left_shoulder - right_shoulder) <= shoulder_tolerance):
+        return False
+
+    # Check the head's prominence
+    if not (head > left_shoulder + left_shoulder * head_tolerance and head > right_shoulder + right_shoulder * head_tolerance):
+        return False
+
+    # Validate the neckline slope
+    if abs((right_neckline - left_neckline) / 2) > neckline_tolerance:
+        return False
+
+    # Confirm the breakout
+    if df.at[index - 1, 'CLOSE'] > min(left_neckline, right_neckline):
+        return False
+
+    # Enhanced validation with trend, support/resistance, and pattern success rate
+    is_in_uptrend = is_Uptrend(df, index + 5, window=5)  # Adapt is_Uptrend function to your DataFrame structure
+    is_near_support_or_resistance = is_near_support_resistance(df, (left_shoulder + right_shoulder) / 2, index)  # Adapt is_near_support_resistance function
+    has_HIGH_success_rate = is_pattern_valid(df, "HeadAndShoulders", (left_shoulder + right_shoulder) / 2, index)  # Adapt is_pattern_valid function
+
+    return is_in_uptrend and is_near_support_or_resistance and has_HIGH_success_rate
+
+# Applying the Head and Shoulders detection to the DataFrame
+df['Head_And_Shoulders'] = False
+
+for i in range(4, len(df)):
+    df.at[i, 'Head_And_Shoulders'] = is_head_and_shoulders(df, i, shoulder_tolerance=5, head_tolerance=3, neckline_tolerance=0.02)  # Adjust parameters as needed
+
+#+------------------------------------------------------------------+
+#x
+#+------------------------------------------------------------------+
+#bearish_channel
+#+------------------------------------------------------------------+
+
+
+
+def is_bearish_channel(df, startIndex, endIndex, tolerance):
+    if startIndex <= 0 or endIndex >= len(df) or startIndex >= endIndex:
+        return False
+
+    # Initialize HIGHest HIGH and LOWest LOW with the first values in the range
+    HIGHestHIGH = df.at[startIndex, 'HIGH']
+    LOWestLOW = df.at[startIndex, 'LOW']
+
+    # Check if the HIGHs and LOWs are descending
+    for i in range(startIndex + 1, endIndex + 1):
+        currentHIGH = df.at[i, 'HIGH']
+        currentLOW = df.at[i, 'LOW']
+        if currentHIGH >= HIGHestHIGH or currentLOW >= LOWestLOW:
+            return False
+        HIGHestHIGH = currentHIGH
+        LOWestLOW = currentLOW
+
+    # Check for parallelism within the channel
+    HIGHSlope = (df.at[startIndex, 'HIGH'] - df.at[endIndex, 'HIGH']) / (endIndex - startIndex)
+    LOWSlope = (df.at[startIndex, 'LOW'] - df.at[endIndex, 'LOW']) / (endIndex - startIndex)
+    isParallel = abs(HIGHSlope - LOWSlope) <= tolerance
+
+    # Enhanced validation with trend, support/resistance, and pattern success rate
+    is_in_downtrend = is_downtrend(df, endIndex, endIndex - startIndex)  # Adapt is_downtrend to your logic
+    is_near_support_or_resistance = is_near_support_resistance(df, (HIGHestHIGH + LOWestLOW) / 2, endIndex)  # Adapt is_near_support_resistance to your logic
+    has_HIGH_success_rate = is_pattern_valid(df, "BearishChannel", (HIGHestHIGH + LOWestLOW) / 2, endIndex)  # Adapt is_pattern_valid to your logic
+
+    return isParallel and is_in_downtrend and is_near_support_or_resistance and has_HIGH_success_rate
+
+# Applying the Bearish Channel detection to the DataFrame
+df['Bearish_Channel'] = False
+
+for i in range(1, len(df)):
+    if i >= 10:  # Example: Checking for a bearish channel over the last 10 bars
+        df.at[i, 'Bearish_Channel'] = is_bearish_channel(df, i - 10, i, tolerance=0.01)
+
+
+
+#------------------------------------------------------------------+
+#x
+#------------------------------------------------------------------+
+#bear_flag
+#------------------------------------------------------------------+
+
+
+def is_bear_flag(df, index, poleLength, flagLength, poleMinDrop, flagTolerance):
+    if index + poleLength + flagLength >= len(df):
+        return False
+
+    poleStartPrice = df.at[index + poleLength + flagLength, 'CLOSE']
+    poleEndPrice = df.at[index + flagLength, 'CLOSE']
+
+    if (poleStartPrice - poleEndPrice) / poleStartPrice < poleMinDrop:
+        return False
+
+    isFlag = True
+    HIGHestHIGH = df.at[index + flagLength, 'HIGH']
+    LOWestLOW = df.at[index + flagLength, 'LOW']
+
+    for i in range(index + flagLength - 1, index - 1, -1):
+        if df.at[i, 'HIGH'] > HIGHestHIGH or df.at[i, 'LOW'] < LOWestLOW:
+            isFlag = False
+            break
+
+    if isFlag and (HIGHestHIGH - LOWestLOW) > (poleStartPrice - poleEndPrice) * flagTolerance:
+        isFlag = False
+
+    if isFlag and index - 1 >= 0:
+        if df.at[index - 1, 'CLOSE'] >= LOWestLOW:
+            isFlag = False
+
+    return isFlag
+
+# Parameters for the bear flag detection
+pole_length = 5  # Number of periods for the pole
+flag_length = 3  # Number of periods for the flag
+pole_min_drop = 0.02  # Minimum relative drop to consider for the pole
+flag_tolerance = 0.02  # Tolerance for the flag's height relative to the pole's drop
+
+# Initialize the column with False
+df['Bear_Flag'] = False
+
+# Iterate through the DataFrame to apply the function
+for i in range(len(df) - (pole_length + flag_length + 1)):
+    df.at[i, 'Bear_Flag'] = is_bear_flag(df, i, pole_length, flag_length, pole_min_drop, flag_tolerance)
+
+
+
+
+
+#------------------------------------------------------------------+
+#x
+#------------------------------------------------------------------+
+#bullish_rectangle
+#------------------------------------------------------------------+
+
+
+def is_bullish_rectangle(df, startIndex, endIndex, tolerance):
+    totalBars = len(df)
+
+    if startIndex < 0 or endIndex >= totalBars or startIndex >= endIndex:
+        print("Invalid index range for bullish rectangle analysis.")
+        return False
+
+    HIGHestHIGH = df.loc[startIndex:endIndex, 'HIGH'].max()
+    LOWestLOW = df.loc[startIndex:endIndex, 'LOW'].min()
+
+    for i in range(startIndex, endIndex + 1):
+        if df.at[i, 'HIGH'] > HIGHestHIGH * (1 + tolerance) or df.at[i, 'LOW'] < LOWestLOW * (1 - tolerance):
+            print("Price breached the rectangle's boundaries.")
+            return False
+
+    if endIndex + 1 < totalBars:
+        breakoutPrice = df.at[endIndex + 1, 'CLOSE']
+        if breakoutPrice <= HIGHestHIGH:
+            print("No bullish breakout observed folLOWing the rectangle.")
+            return False
+    else:
+        print("Insufficient data to confirm a bullish breakout.")
+        return False
+
+    isNearSupportOrResistance = is_near_support_resistance(HIGHestHIGH, LOWestLOW)  # Adapted for example
+    hasHIGHSuccessRate = is_pattern_valid("BullishRectangle", (HIGHestHIGH + LOWestLOW) / 2)  # Adapted for example
+
+    return isNearSupportOrResistance and hasHIGHSuccessRate
+
+# Initialize the column with False
+df['Bullish_Rectangle'] = False
+
+# Apply the function to the DataFrame within a range of indices with a specified tolerance
+start_index = 10  # example start index
+end_index = 50  # example end index
+tolerance = 0.02  # example tolerance
+
+for i in range(start_index, end_index + 1):
+    df.at[i, 'Bullish_Rectangle'] = is_bullish_rectangle(df, start_index, i, tolerance)
+
+
+#+------------------------------------------------------------------+
+#x
+#+------------------------------------------------------------------+
+#bullish_pennant
+#+------------------------------------------------------------------+
+
+
+
+def is_bullish_pennant(df, index, poleLength, pennantLength, poleMinRise):
+    totalBars = len(df)
+
+    if index + poleLength + pennantLength >= totalBars:
+        print("Insufficient data for bullish pennant pattern detection.")
+        return False
+
+    poleStartPrice = df.at[index + poleLength + pennantLength, 'CLOSE']
+    poleEndPrice = df.at[index + pennantLength, 'CLOSE']
+
+    if (poleEndPrice - poleStartPrice) / poleStartPrice < poleMinRise:
+        print("The price increase does not satisfy the minimum rise criteria for the pole.")
+        return False
+
+    isNarrowing = True
+    previousHIGH = df.at[index + pennantLength, 'HIGH']
+    previousLOW = df.at[index + pennantLength, 'LOW']
+
+    for i in range(index + pennantLength - 1, index - 1, -1):
+        currentHIGH = df.at[i, 'HIGH']
+        currentLOW = df.at[i, 'LOW']
+        if currentHIGH > previousHIGH or currentLOW < previousLOW:
+            isNarrowing = False
+            break
+        previousHIGH = currentHIGH
+        previousLOW = currentLOW
+
+    if isNarrowing and index - 1 >= 0:
+        breakoutPrice = df.at[index - 1, 'CLOSE']
+        if breakoutPrice <= previousHIGH:
+            print("No bullish breakout observed folLOWing the pennant.")
+            return False
+    else:
+        print("Cannot confirm a bullish breakout post-pennant.")
+        return False
+
+    isInUptrend = is_Uptrend(df, index + poleLength + pennantLength, poleLength)  # Define is_Uptrend appropriately
+    isNearSupportOrResistance = is_near_support_resistance(poleEndPrice)  # Define is_near_support_resistance function
+    hasHIGHSuccessRate = is_pattern_valid("BullishPennant", poleEndPrice)  # Define is_pattern_valid function
+
+    return isNarrowing and isInUptrend and isNearSupportOrResistance and hasHIGHSuccessRate
+
+# Initialize the column with False
+df['Bullish_Pennant'] = False
+
+# Parameters for the bullish pennant detection
+pole_length = 5  # Number of periods for the pole
+pennant_length = 3  # Number of periods for the pennant
+pole_min_rise = 0.02  # Minimum relative rise to consider for the pole
+
+# Iterate through the DataFrame to apply the function
+for i in range(len(df) - (pole_length + pennant_length + 1)):
+    df.at[i, 'Bullish_Pennant'] = is_bullish_pennant(df, i, pole_length, pennant_length, pole_min_rise)
+
+
+#------------------------------------------------------------------+
+#x
+#------------------------------------------------------------------+
+#bullish_triangle
+#------------------------------------------------------------------+
+
+
+
+def is_bullish_triangle(df, startIndex, endIndex):
+    totalBars = len(df)
+
+    if startIndex < 0 or endIndex >= totalBars or startIndex >= endIndex:
+        print(f"Invalid indices for bullish triangle analysis. Start: {startIndex}, End: {endIndex}")
+        return False
+
+    HIGHestHIGH = df.loc[startIndex, 'HIGH']
+    LOWestLOW = df.loc[startIndex, 'LOW']
+    isDescendingHIGHs = True
+    isFlatOrAscendingLOWs = True
+
+    for i in range(startIndex + 1, endIndex + 1):
+        currentHIGH = df.loc[i, 'HIGH']
+        currentLOW = df.loc[i, 'LOW']
+
+        if currentHIGH > HIGHestHIGH:
+            isDescendingHIGHs = False
+            break
+        HIGHestHIGH = currentHIGH
+
+        if currentLOW < LOWestLOW:
+            isFlatOrAscendingLOWs = False
+            break
+        LOWestLOW = currentLOW
+
+    if not isDescendingHIGHs or not isFlatOrAscendingLOWs:
+        print("Not a bullish triangle pattern.")
+        return False
+
+    if endIndex + 1 < totalBars and df.loc[endIndex + 1, 'CLOSE'] > HIGHestHIGH:
+        isInUptrend = is_Uptrend(df, startIndex, endIndex - startIndex)
+        isNearSupportOrResistance = is_near_support_resistance(df, (HIGHestHIGH + LOWestLOW) / 2, endIndex)
+        hasHIGHSuccessRate = is_pattern_valid("BullishTriangle", (HIGHestHIGH + LOWestLOW) / 2, endIndex)
+        return isInUptrend and isNearSupportOrResistance and hasHIGHSuccessRate
+    else:
+        print("No bullish breakout detected post-triangle.")
+        return False
+
+# Initialize the column with False
+df['Bullish_Triangle'] = False
+
+# Iterate through the DataFrame to apply the function
+for i in range(len(df) - 1):
+    df.at[i, 'Bullish_Triangle'] = is_bullish_triangle(df, i - 10, i)  # Example usage with a lookback window of 10
+
+
+
+
+
+
+#------------------------------------------------------------------+
+#x
+#------------------------------------------------------------------+
+#bullish_wedge
+#------------------------------------------------------------------+
+
+
+
+def is_bullish_wedge(df, startIndex, endIndex):
+    totalBars = len(df)
+
+    if startIndex < 0 or endIndex >= totalBars or startIndex >= endIndex:
+        print(f"Invalid indices for bullish wedge analysis. Start: {startIndex}, End: {endIndex}")
+        return False
+
+    HIGHestHIGH = df.loc[startIndex, 'HIGH']
+    LOWestLOW = df.loc[startIndex, 'LOW']
+    isDescendingHIGHs = True
+    isDescendingLOWs = True
+
+    for i in range(startIndex + 1, endIndex + 1):
+        currentHIGH = df.loc[i, 'HIGH']
+        currentLOW = df.loc[i, 'LOW']
+
+        isDescendingHIGHs &= currentHIGH < HIGHestHIGH
+        isDescendingLOWs &= currentLOW < LOWestLOW
+
+        HIGHestHIGH = min(HIGHestHIGH, currentHIGH)
+        LOWestLOW = min(LOWestLOW, currentLOW)
+
+    if not isDescendingHIGHs or not isDescendingLOWs:
+        print("Pattern does not meet bullish wedge criteria.")
+        return False
+
+    if endIndex + 1 < totalBars and df.loc[endIndex + 1, 'CLOSE'] > HIGHestHIGH:
+        isInDowntrend = is_downtrend(df, startIndex, endIndex)  # Define is_downtrend function
+        isNearSupportOrResistance = is_near_support_resistance(df, (HIGHestHIGH + LOWestLOW) / 2, endIndex)  # Define is_near_support_resistance function
+        hasHIGHSuccessRate = is_pattern_valid("BullishWedge", (HIGHestHIGH + LOWestLOW) / 2, endIndex)  # Define is_pattern_valid function
+        return isInDowntrend and isNearSupportOrResistance and hasHIGHSuccessRate
+    else:
+        print("No bullish breakout post-wedge.")
+        return False
+
+# Initialize the column with False
+df['Bullish_Wedge'] = False
+
+# Iterate through the DataFrame to apply the function
+for i in range(len(df) - 15):  # Assuming 15 as the pattern length
+    df.at[i, 'Bullish_Wedge'] = is_bullish_wedge(df, i, i + 15)
+
+
+
+#+------------------------------------------------------------------+
+#x
+#+------------------------------------------------------------------+
+#bearish_rectangle
+#+------------------------------------------------------------------+
+
+
+
+def is_bearish_rectangle(df, startIndex, endIndex, breakoutCandleSizeFactor):
+    totalBars = len(df)
+    
+    if startIndex < 0 or endIndex >= totalBars or startIndex >= endIndex or breakoutCandleSizeFactor <= 0:
+        print("Invalid parameters for bearish rectangle detection.")
+        return False
+
+    HIGHestHIGH = df.loc[startIndex:endIndex, 'HIGH'].max()
+    LOWestLOW = df.loc[startIndex:endIndex, 'LOW'].min()
+
+    for i in range(startIndex, endIndex + 1):
+        if df.loc[i, 'HIGH'] > HIGHestHIGH or df.loc[i, 'LOW'] < LOWestLOW:
+            return False
+
+    if endIndex + 1 < totalBars:
+        breakoutCandle = df.loc[endIndex + 1]
+        breakoutCandleSize = breakoutCandle['CLOSE'] - breakoutCandle['LOW']
+
+        if breakoutCandle['LOW'] < LOWestLOW and breakoutCandleSize >= (HIGHestHIGH - LOWestLOW) * breakoutCandleSizeFactor:
+            isInDowntrend = is_downtrend(df, startIndex, endIndex)  # Define is_downtrend
+            isNearSupportOrResistance = is_near_support_resistance(df, LOWestLOW, endIndex)  # Define is_near_support_resistance
+            hasHIGHSuccessRate = is_pattern_valid("BearishRectangle", LOWestLOW, endIndex)  # Define is_pattern_valid
+            return isInDowntrend and isNearSupportOrResistance and hasHIGHSuccessRate
+
+    return False
+
+# Apply the bearish rectangle detection
+df['Bearish_Rectangle'] = False
+for i in range(len(df) - 20):  # Assuming 20 as the length of the rectangle pattern
+    df.at[i, 'Bearish_Rectangle'] = is_bearish_rectangle(df, i, i + 20, 0.5)  # 0.5 is an example breakout candle size factor
+
+
+
+
+
+
+#------------------------------------------------------------------+
+#x
+#------------------------------------------------------------------+
+#bearish_pennant
+#------------------------------------------------------------------+
+
+
+
+def is_bearish_pennant(df, index, poleLength, pennantLength, poleMinDrop):
+    totalBars = len(df)
+
+    if index + poleLength + pennantLength >= totalBars:
+        print("Insufficient data for bearish pennant pattern detection.")
+        return False
+
+    poleStartPrice = df.at[index + poleLength + pennantLength, 'CLOSE']
+    poleEndPrice = df.at[index + pennantLength, 'CLOSE']
+
+    if (poleStartPrice - poleEndPrice) / poleStartPrice < poleMinDrop:
+        print("The price drop does not meet the minimum requirement for the pole.")
+        return False
+
+    isConverging = True
+    for i in range(index + pennantLength, index, -1):
+        if df.at[i, 'HIGH'] > df.at[index + pennantLength, 'HIGH'] or df.at[i, 'LOW'] < df.at[index + pennantLength, 'LOW']:
+            isConverging = False
+            break
+
+    if not isConverging:
+        print("Price action during the pennant does not show converging.")
+        return False
+
+    if index - 1 >= 0 and df.at[index - 1, 'CLOSE'] < df.at[index, 'LOW']:
+        isInDowntrend = True  # Implement your logic for downtrend check
+        isNearSupportOrResistance = True  # Implement your logic for support or resistance check
+        hasHIGHSuccessRate = True  # Implement your logic for pattern validation
+        return isInDowntrend and isNearSupportOrResistance and hasHIGHSuccessRate
+
+    return False
+
+# Initialize the 'Bearish_Pennant' column with False
+df['Bearish_Pennant'] = False
+
+# Parameters for bearish pennant detection
+pole_length = 10  # Example length of the pole
+pennant_length = 5  # Example length of the pennant
+
+# Apply the function across the DataFrame
+for i in range(len(df) - (pole_length + pennant_length + 1)):
+    df.at[i, 'Bearish_Pennant'] = is_bearish_pennant(df, i, pole_length, pennant_length, 0.1)  # 0.1 is an example for poleMinDrop
+
+
+
+
+#------------------------------------------------------------------+
+#4
+#------------------------------------------------------------------+
+#bearish_triangle
+#------------------------------------------------------------------+
+
+
+
+def is_bearish_triangle(df, startIndex, endIndex):
+    # Validate the index range
+    if startIndex < 0 or endIndex >= len(df) or startIndex >= endIndex:
+        print(f"Invalid indices for isBearishTriangle: startIndex = {startIndex}, endIndex = {endIndex}")
+        return False
+
+    HIGHestHIGH = df.loc[startIndex, 'HIGH']
+    LOWestLOW = df.loc[startIndex, 'LOW']
+    descendingHIGHs = True
+    ascendingLOWs = True
+
+    # Check for descending HIGHs and ascending LOWs
+    for i in range(startIndex + 1, endIndex + 1):
+        currentHIGH = df.loc[i, 'HIGH']
+        currentLOW = df.loc[i, 'LOW']
+
+        if currentHIGH >= HIGHestHIGH or currentLOW <= LOWestLOW:
+            descendingHIGHs = False
+            break
+        HIGHestHIGH = min(HIGHestHIGH, currentHIGH)
+        LOWestLOW = max(LOWestLOW, currentLOW)
+
+    if not descendingHIGHs:
+        print("Price action does not show descending HIGHs.")
+        return False
+
+    # Confirm a bearish breakout folLOWing the pattern
+    if endIndex + 1 < len(df) and df.loc[endIndex + 1, 'CLOSE'] < LOWestLOW:
+        isInDowntrend = True  # Implement your downtrend logic
+        isNearSupportOrResistance = True  # Implement your support/resistance logic
+        hasHIGHSuccessRate = True  # Implement your pattern success logic
+
+        return isInDowntrend and isNearSupportOrResistance and hasHIGHSuccessRate
+
+    print("No bearish breakout detected post-triangle.")
+    return False
+
+# Initialize the 'Bearish_Triangle' column with False
+df['Bearish_Triangle'] = False
+
+# Iterate through the DataFrame to apply the function
+for i in range(len(df)):
+    if i >= 20:  # Example: checking for a bearish triangle pattern in the last 20 bars
+        df.at[i, 'Bearish_Triangle'] = is_bearish_triangle(df, i - 20, i)
+
+
+
+
+
+#------------------------------------------------------------------+
+#x
+#------------------------------------------------------------------+
+#bearish_wedge
+#------------------------------------------------------------------+
+
+
+def is_bearish_wedge(df, startIndex, endIndex):
+    if startIndex < 0 or endIndex >= len(df) or startIndex >= endIndex:
+        print(f"Invalid indices for isBearishWedge: Start: {startIndex}, End: {endIndex}")
+        return False
+
+    isInUptrend = is_Uptrend(df, startIndex, endIndex)  # Ensure you have defined is_Uptrend function based on your criteria
+
+    previousHIGH = df.loc[startIndex, 'HIGH']
+    previousLOW = df.loc[startIndex, 'LOW']
+    isConverging = True
+
+    for i in range(startIndex + 1, endIndex + 1):
+        currentHIGH = df.loc[i, 'HIGH']
+        currentLOW = df.loc[i, 'LOW']
+        
+        if currentHIGH >= previousHIGH or currentLOW <= previousLOW:
+            isConverging = False
+            break
+
+        previousHIGH = min(currentHIGH, previousHIGH)
+        previousLOW = max(currentLOW, previousLOW)
+
+    if not isConverging or not isInUptrend:
+        return False
+
+    # Confirm a bearish breakout
+    if endIndex + 1 < len(df) and df.loc[endIndex + 1, 'CLOSE'] < previousLOW:
+        # Assuming you define these functions to match your strategy
+        isNearSupportOrResistance = is_near_support_resistance(df, endIndex + 1)  # Placeholder
+        hasHIGHSuccessRate = is_pattern_valid("BearishWedge", endIndex + 1)  # Placeholder
+        return isNearSupportOrResistance and hasHIGHSuccessRate
+
+    return False
+
+# Initialize the 'Bearish_Wedge' column with False
+df['Bearish_Wedge'] = False
+
+# Apply the function across the DataFrame within a defined window
+for i in range(len(df)):
+    if i >= 20:  # Example: checking for a bearish wedge in the last 20 bars
+        df.at[i, 'Bearish_Wedge'] = is_bearish_wedge(df, i - 20, i)
+
+
+
+#------------------------------------------------------------------+
+#
+#------------------------------------------------------------------+
+
+
+# Drop rows with any NaN values created during the feature calculation process
+df.dropna(inplace=True)
+
+#------------------------------------------------------------------+
+#x
+#------------------------------------------------------------------+
+# einde van die feature engineering
+#------------------------------------------------------------------+
+
+
+
+#------------------------------------------------------------------+
+#x
+#------------------------------------------------------------------+
+#Normalization of features begin
+#------------------------------------------------------------------+
+
+import pandas as pd
+import numpy as np
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.model_selection import train_test_split, TimeSeriesSplit, cross_val_score
+from sklearn.linear_model import LogisticRegression
+from keras.models import Sequential
+from keras.layers import LSTM, Dense
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
+
+# Assuming the feature engineering part is already included here...
+
+# Normalize features using MinMaxScaler (already defined in feature engineering)
+# Ensure this is not duplicated if it's already done in the feature engineering section
+
+# Check if 'target' column exists in the DataFrame
+if 'target' in df.columns:
+    X = df.drop('target', axis=1)
+    y = df['target']
+else:
+    print("The 'target' column was not found in the DataFrame.")
+    # Handle this situation appropriately
+    X = df.drop(['CLOSE'], axis=1)  # Example of dropping 'CLOSE' if 'target' is not present
+    y = None  # Placeholder
+
+# Splitting the dataset for training and testing
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.33, random_state=42)
+
+# Logistic Regression Model with TimeSeriesSplit for cross-validation
+logistic_model = LogisticRegression()
+tscv = TimeSeriesSplit(n_splits=5)
+scores = cross_val_score(logistic_model, X_train, y_train, cv=tscv)
+print("Mean cross-validation score:", scores.mean())
+
+# Reshape for LSTM
+if X_train.ndim == 2:
+    X_train_reshaped = X_train.values.reshape((X_train.shape[0], 1, X_train.shape[1]))
+    X_test_reshaped = X_test.values.reshape((X_test.shape[0], 1, X_test.shape[1]))
+else:
+    print("X_train is not 2-dimensional as expected.")
+
+# LSTM model definition and compilation here
+
+# Define LSTM model
+lstm_model = Sequential()
+lstm_model.add(LSTM(50, input_shape=(X_train_reshaped.shape[1], X_train_reshaped.shape[2])))
+lstm_model.add(Dense(1, activation='sigmoid'))
+
+# Compile and fit the LSTM model
+lstm_model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+lstm_model.fit(X_train_reshaped, y_train, epochs=10, batch_size=32, verbose=1)
+
+# Model Evaluation for LSTM
+y_pred = (lstm_model.predict(X_test_reshaped) > 0.5).astype("int32")
+accuracy = accuracy_score(y_test, y_pred)
+precision = precision_score(y_test, y_pred)
+recall = recall_score(y_test, y_pred)
+f1 = f1_score(y_test, y_pred)
+auc_roc = roc_auc_score(y_test, y_pred)
+
+# Print performance metrics
+print("Accuracy:", accuracy)
+print("Precision:", precision)
+print("Recall:", recall)
+print("F1 Score:", f1)
+print("AUC-ROC:", auc_roc)
