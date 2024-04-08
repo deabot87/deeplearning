@@ -1,0 +1,303 @@
+error 
+
+[{
+	"resource": "/E:/deep env/deepH8/model develompment main.py",
+	"owner": "_generated_diagnostic_collection_name_#3",
+	"code": {
+		"value": "reportUndefinedVariable",
+		"target": {
+			"$mid": 1,
+			"path": "/microsoft/pyright/blob/main/docs/configuration.md",
+			"scheme": "https",
+			"authority": "github.com",
+			"fragment": "reportUndefinedVariable"
+		}
+	},
+	"severity": 4,
+	"message": "\"is_pattern_valid\" is not defined",
+	"source": "Pylance",
+	"startLineNumber": 528,
+	"startColumn": 30,
+	"endLineNumber": 528,
+	"endColumn": 46
+},{
+	"resource": "/E:/deep env/deepH8/model develompment main.py",
+	"owner": "_generated_diagnostic_collection_name_#3",
+	"code": {
+		"value": "reportUndefinedVariable",
+		"target": {
+			"$mid": 1,
+			"path": "/microsoft/pyright/blob/main/docs/configuration.md",
+			"scheme": "https",
+			"authority": "github.com",
+			"fragment": "reportUndefinedVariable"
+		}
+	},
+	"severity": 4,
+	"message": "\"is_pattern_valid\" is not defined",
+	"source": "Pylance",
+	"startLineNumber": 1416,
+	"startColumn": 30,
+	"endLineNumber": 1416,
+	"endColumn": 46
+},{
+	"resource": "/E:/deep env/deepH8/model develompment main.py",
+	"owner": "_generated_diagnostic_collection_name_#3",
+	"code": {
+		"value": "reportUndefinedVariable",
+		"target": {
+			"$mid": 1,
+			"path": "/microsoft/pyright/blob/main/docs/configuration.md",
+			"scheme": "https",
+			"authority": "github.com",
+			"fragment": "reportUndefinedVariable"
+		}
+	},
+	"severity": 4,
+	"message": "\"is_pattern_valid\" is not defined",
+	"source": "Pylance",
+	"startLineNumber": 1254,
+	"startColumn": 34,
+	"endLineNumber": 1254,
+	"endColumn": 50
+},{
+	"resource": "/E:/deep env/deepH8/model develompment main.py",
+	"owner": "_generated_diagnostic_collection_name_#3",
+	"code": {
+		"value": "reportUndefinedVariable",
+		"target": {
+			"$mid": 1,
+			"path": "/microsoft/pyright/blob/main/docs/configuration.md",
+			"scheme": "https",
+			"authority": "github.com",
+			"fragment": "reportUndefinedVariable"
+		}
+	},
+	"severity": 4,
+	"message": "\"is_pattern_valid\" is not defined",
+	"source": "Pylance",
+	"startLineNumber": 1210,
+	"startColumn": 30,
+	"endLineNumber": 1210,
+	"endColumn": 46
+},{
+	"resource": "/E:/deep env/deepH8/model develompment main.py",
+	"owner": "_generated_diagnostic_collection_name_#3",
+	"code": {
+		"value": "reportUndefinedVariable",
+		"target": {
+			"$mid": 1,
+			"path": "/microsoft/pyright/blob/main/docs/configuration.md",
+			"scheme": "https",
+			"authority": "github.com",
+			"fragment": "reportUndefinedVariable"
+		}
+	},
+	"severity": 4,
+	"message": "\"is_pattern_valid\" is not defined",
+	"source": "Pylance",
+	"startLineNumber": 1155,
+	"startColumn": 30,
+	"endLineNumber": 1155,
+	"endColumn": 46
+},{
+	"resource": "/E:/deep env/deepH8/model develompment main.py",
+	"owner": "_generated_diagnostic_collection_name_#3",
+	"code": {
+		"value": "reportUndefinedVariable",
+		"target": {
+			"$mid": 1,
+			"path": "/microsoft/pyright/blob/main/docs/configuration.md",
+			"scheme": "https",
+			"authority": "github.com",
+			"fragment": "reportUndefinedVariable"
+		}
+	},
+	"severity": 4,
+	"message": "\"is_pattern_valid\" is not defined",
+	"source": "Pylance",
+	"startLineNumber": 1097,
+	"startColumn": 26,
+	"endLineNumber": 1097,
+	"endColumn": 42
+},{
+	"resource": "/E:/deep env/deepH8/model develompment main.py",
+	"owner": "_generated_diagnostic_collection_name_#3",
+	"code": {
+		"value": "reportUndefinedVariable",
+		"target": {
+			"$mid": 1,
+			"path": "/microsoft/pyright/blob/main/docs/configuration.md",
+			"scheme": "https",
+			"authority": "github.com",
+			"fragment": "reportUndefinedVariable"
+		}
+	},
+	"severity": 4,
+	"message": "\"is_pattern_valid\" is not defined",
+	"source": "Pylance",
+	"startLineNumber": 1035,
+	"startColumn": 26,
+	"endLineNumber": 1035,
+	"endColumn": 42
+},{
+	"resource": "/E:/deep env/deepH8/model develompment main.py",
+	"owner": "_generated_diagnostic_collection_name_#3",
+	"code": {
+		"value": "reportUndefinedVariable",
+		"target": {
+			"$mid": 1,
+			"path": "/microsoft/pyright/blob/main/docs/configuration.md",
+			"scheme": "https",
+			"authority": "github.com",
+			"fragment": "reportUndefinedVariable"
+		}
+	},
+	"severity": 4,
+	"message": "\"is_pattern_valid\" is not defined",
+	"source": "Pylance",
+	"startLineNumber": 938,
+	"startColumn": 29,
+	"endLineNumber": 938,
+	"endColumn": 45
+},{
+	"resource": "/E:/deep env/deepH8/model develompment main.py",
+	"owner": "_generated_diagnostic_collection_name_#3",
+	"code": {
+		"value": "reportUndefinedVariable",
+		"target": {
+			"$mid": 1,
+			"path": "/microsoft/pyright/blob/main/docs/configuration.md",
+			"scheme": "https",
+			"authority": "github.com",
+			"fragment": "reportUndefinedVariable"
+		}
+	},
+	"severity": 4,
+	"message": "\"is_pattern_valid\" is not defined",
+	"source": "Pylance",
+	"startLineNumber": 895,
+	"startColumn": 29,
+	"endLineNumber": 895,
+	"endColumn": 45
+},{
+	"resource": "/E:/deep env/deepH8/model develompment main.py",
+	"owner": "_generated_diagnostic_collection_name_#3",
+	"code": {
+		"value": "reportUndefinedVariable",
+		"target": {
+			"$mid": 1,
+			"path": "/microsoft/pyright/blob/main/docs/configuration.md",
+			"scheme": "https",
+			"authority": "github.com",
+			"fragment": "reportUndefinedVariable"
+		}
+	},
+	"severity": 4,
+	"message": "\"is_pattern_valid\" is not defined",
+	"source": "Pylance",
+	"startLineNumber": 846,
+	"startColumn": 37,
+	"endLineNumber": 846,
+	"endColumn": 53
+},{
+	"resource": "/E:/deep env/deepH8/model develompment main.py",
+	"owner": "_generated_diagnostic_collection_name_#3",
+	"code": {
+		"value": "reportUndefinedVariable",
+		"target": {
+			"$mid": 1,
+			"path": "/microsoft/pyright/blob/main/docs/configuration.md",
+			"scheme": "https",
+			"authority": "github.com",
+			"fragment": "reportUndefinedVariable"
+		}
+	},
+	"severity": 4,
+	"message": "\"is_pattern_valid\" is not defined",
+	"source": "Pylance",
+	"startLineNumber": 580,
+	"startColumn": 29,
+	"endLineNumber": 580,
+	"endColumn": 45
+},{
+	"resource": "/E:/deep env/deepH8/model develompment main.py",
+	"owner": "_generated_diagnostic_collection_name_#3",
+	"code": {
+		"value": "reportUndefinedVariable",
+		"target": {
+			"$mid": 1,
+			"path": "/microsoft/pyright/blob/main/docs/configuration.md",
+			"scheme": "https",
+			"authority": "github.com",
+			"fragment": "reportUndefinedVariable"
+		}
+	},
+	"severity": 4,
+	"message": "\"is_pattern_valid\" is not defined",
+	"source": "Pylance",
+	"startLineNumber": 620,
+	"startColumn": 34,
+	"endLineNumber": 620,
+	"endColumn": 50
+},{
+	"resource": "/E:/deep env/deepH8/model develompment main.py",
+	"owner": "_generated_diagnostic_collection_name_#3",
+	"code": {
+		"value": "reportUndefinedVariable",
+		"target": {
+			"$mid": 1,
+			"path": "/microsoft/pyright/blob/main/docs/configuration.md",
+			"scheme": "https",
+			"authority": "github.com",
+			"fragment": "reportUndefinedVariable"
+		}
+	},
+	"severity": 4,
+	"message": "\"is_pattern_valid\" is not defined",
+	"source": "Pylance",
+	"startLineNumber": 673,
+	"startColumn": 29,
+	"endLineNumber": 673,
+	"endColumn": 45
+},{
+	"resource": "/E:/deep env/deepH8/model develompment main.py",
+	"owner": "_generated_diagnostic_collection_name_#3",
+	"code": {
+		"value": "reportUndefinedVariable",
+		"target": {
+			"$mid": 1,
+			"path": "/microsoft/pyright/blob/main/docs/configuration.md",
+			"scheme": "https",
+			"authority": "github.com",
+			"fragment": "reportUndefinedVariable"
+		}
+	},
+	"severity": 4,
+	"message": "\"is_pattern_valid\" is not defined",
+	"source": "Pylance",
+	"startLineNumber": 729,
+	"startColumn": 26,
+	"endLineNumber": 729,
+	"endColumn": 42
+},{
+	"resource": "/E:/deep env/deepH8/model develompment main.py",
+	"owner": "_generated_diagnostic_collection_name_#3",
+	"code": {
+		"value": "reportUndefinedVariable",
+		"target": {
+			"$mid": 1,
+			"path": "/microsoft/pyright/blob/main/docs/configuration.md",
+			"scheme": "https",
+			"authority": "github.com",
+			"fragment": "reportUndefinedVariable"
+		}
+	},
+	"severity": 4,
+	"message": "\"is_pattern_valid\" is not defined",
+	"source": "Pylance",
+	"startLineNumber": 787,
+	"startColumn": 26,
+	"endLineNumber": 787,
+	"endColumn": 42
+}]
